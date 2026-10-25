@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#4338ca" />
   <title>AsisQR - Control de Asistencia Estudiantil</title>
+  <!-- Manifiesto integrado para que PWABuilder genere el APK con Cámara -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"AsisQR Control de Asistencia","short_name":"AsisQR","start_url":"./index.html","display":"standalone","background_color":"#ffffff","theme_color":"#4338ca","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3135/3135755.png","sizes":"512x512","type":"image/png"}]}' />
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Generador QR (QRious) -->
@@ -61,7 +64,6 @@
 
     <!-- PESTAÑA 1: DASHBOARD DE ASISTENCIA -->
     <section id="view-dashboard" class="space-y-6">
-      <!-- Tarjetas de Resumen -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
           <p class="text-xs text-slate-500 uppercase font-semibold">Matrícula Total</p>
@@ -81,7 +83,6 @@
         </div>
       </div>
 
-      <!-- Filtros y Acciones -->
       <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
         <div class="flex flex-wrap items-center gap-2">
           <select id="filter-section" onchange="renderAll()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
@@ -99,7 +100,6 @@
         </div>
       </div>
 
-      <!-- Tabla de Estudiantes -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
@@ -125,24 +125,39 @@
         <!-- Lector de Cámara -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
           <h2 class="font-bold text-base mb-1">Escáner por Cámara</h2>
-          <p class="text-xs text-slate-500 mb-4">Enfoca el código QR del carnet estudiantil para registrar su asistencia.</p>
-          <div id="reader" class="w-full rounded-lg overflow-hidden bg-slate-900 min-h-[240px]"></div>
+          <p class="text-xs text-slate-500 mb-3">Usa la cámara en vivo o el botón de captura directa si estás en un APK.</p>
+
+          <!-- Estado de Lectura -->
+          <div id="scan-feedback" class="mb-3 hidden p-3 rounded-lg text-sm font-medium"></div>
+
+          <!-- Botón Especial para APK (Cámara Nativa / Foto) -->
+          <div class="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <p class="text-xs text-indigo-900 font-semibold mb-2">💡 ¿La cámara en vivo no abre en tu APK? Usa este botón:</p>
+            <label class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold py-2.5 px-4 rounded-lg shadow flex items-center justify-center gap-2 cursor-pointer transition">
+              <span>📸</span> Tomar Foto al QR / Subir Imagen
+              <input type="file" accept="image/*" capture="environment" onchange="scanFromFile(event)" class="hidden" />
+            </label>
+          </div>
+
+          <!-- Visor en vivo -->
+          <div id="reader" class="w-full rounded-lg overflow-hidden bg-slate-900 min-h-[220px]"></div>
+          <div id="reader-file-temp" class="hidden"></div>
+
           <div class="flex gap-2 mt-4">
             <button onclick="startCamera()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-lg">
-              ▶️ Iniciar Cámara
+              ▶️ Cámara en Vivo
             </button>
             <button onclick="stopCamera()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-semibold py-2 rounded-lg">
               ⏹️ Detener
             </button>
           </div>
-          <div id="scan-feedback" class="mt-4 hidden p-3 rounded-lg text-sm font-medium"></div>
         </div>
 
         <!-- Simulador Rápido -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <h2 class="font-bold text-base mb-1">Simulador de Escaneo Rápido</h2>
-          <p class="text-xs text-slate-500 mb-4">Haz clic en cualquier estudiante para simular la lectura de su código QR.</p>
-          <div id="simulator-list" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+          <h2 class="font-bold text-base mb-1">Registro Manual / Simulador QR</h2>
+          <p class="text-xs text-slate-500 mb-4">Toca cualquier estudiante para registrar su asistencia al instante.</p>
+          <div id="simulator-list" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
         </div>
       </div>
     </section>
@@ -161,7 +176,7 @@
           <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
             🖨️ Imprimir Carnets
           </button>
-          <button onclick="exportBackup()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg" title="Guardar copia para pasar al teléfono o PC">
+          <button onclick="exportBackup()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
             💾 Respaldar Datos
           </button>
           <label class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer">
@@ -177,7 +192,6 @@
         </div>
       </div>
 
-      <!-- Cuadrícula de Carnets -->
       <div id="print-area" class="grid sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
     </section>
 
@@ -217,7 +231,6 @@
   </div>
 
   <script>
-    // Datos iniciales de ejemplo
     const DEFAULT_STUDENTS = [
       { id: "EST-101", name: "Carlos Eduardo Gómez", cedula: "V-31.204.110", section: "3er Año B" },
       { id: "EST-102", name: "Mariana Valentina Rivas", cedula: "V-31.550.890", section: "3er Año B" },
@@ -230,7 +243,6 @@
     let attendance = JSON.parse(localStorage.getItem("asisqr_attendance")) || {};
     let html5QrCode = null;
 
-    // Inicializar fecha de hoy
     const dateInput = document.getElementById("current-date");
     const todayStr = new Date().toISOString().split("T")[0];
     dateInput.value = todayStr;
@@ -241,7 +253,6 @@
       localStorage.setItem("asisqr_attendance", JSON.stringify(attendance));
     }
 
-    // Sonido Beep al escanear
     function playBeep() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -257,7 +268,6 @@
       } catch (e) {}
     }
 
-    // Cambiar de pestaña
     function switchTab(tab) {
       ["dashboard", "scanner", "cards"].forEach(t => {
         document.getElementById(`view-${t}`).classList.toggle("hidden", t !== tab);
@@ -272,7 +282,6 @@
       renderAll();
     }
 
-    // Actualizar opciones del filtro de secciones
     function updateSectionFilter() {
       const select = document.getElementById("filter-section");
       const currentVal = select.value;
@@ -282,7 +291,6 @@
       if (sections.includes(currentVal)) select.value = currentVal;
     }
 
-    // Abrir y cerrar modal para Agregar o Editar Estudiante
     function openModal(studentId = null) {
       const modal = document.getElementById("student-modal");
       const title = document.getElementById("modal-title");
@@ -317,7 +325,6 @@
       modal.classList.remove("flex");
     }
 
-    // Guardar Estudiante (Nuevo o Editado)
     function saveStudent(e) {
       e.preventDefault();
       const idVal = document.getElementById("student-id").value;
@@ -343,7 +350,6 @@
       renderAll();
     }
 
-    // Eliminar Estudiante Individual
     function deleteStudent(studentId) {
       const st = students.find(s => s.id === studentId);
       if (!st) return;
@@ -355,7 +361,6 @@
       renderAll();
     }
 
-    // Vaciar Toda la Matrícula de un solo golpe
     function clearAllStudents() {
       if (students.length === 0) {
         alert("La matrícula ya está vacía.");
@@ -368,7 +373,6 @@
       renderAll();
     }
 
-    // Restaurar datos de demostración
     function resetDemoData() {
       if (!confirm("¿Restaurar los 4 estudiantes de ejemplo? Esto reemplazará la lista actual.")) return;
       students = [...DEFAULT_STUDENTS];
@@ -377,7 +381,6 @@
       renderAll();
     }
 
-    // Exportar e Importar Respaldo (Para pasar datos entre PC y Teléfono)
     function exportBackup() {
       const data = { students, attendance };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -413,7 +416,6 @@
       event.target.value = "";
     }
 
-    // Alternar o Registrar Asistencia
     function toggleAttendance(studentId, forcePresent = false) {
       const dateKey = dateInput.value;
       if (!attendance[dateKey]) attendance[dateKey] = {};
@@ -428,24 +430,43 @@
       renderAll();
     }
 
-    // Procesar código QR leído
     function handleQrScan(decodedText) {
-      const st = students.find(s => s.id === decodedText.trim() || s.cedula === decodedText.trim());
+      const cleanText = decodedText.trim();
+      const st = students.find(s => s.id === cleanText || s.cedula === cleanText);
       const feedback = document.getElementById("scan-feedback");
       feedback.classList.remove("hidden");
 
       if (st) {
         playBeep();
         toggleAttendance(st.id, true);
-        feedback.className = "mt-4 p-3 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-300";
+        feedback.className = "mb-3 p-3 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-300";
         feedback.innerHTML = `✅ <strong>Asistencia registrada:</strong> ${st.name} (${st.section})`;
       } else {
-        feedback.className = "mt-4 p-3 rounded-lg text-sm font-medium bg-rose-100 text-rose-800 border border-rose-300";
-        feedback.innerHTML = `⚠️ Código QR no reconocido en la matrícula (${decodedText}).`;
+        feedback.className = "mb-3 p-3 rounded-lg text-sm font-medium bg-rose-100 text-rose-800 border border-rose-300";
+        feedback.innerHTML = `⚠️ Código QR no reconocido en la matrícula (${cleanText}).`;
       }
     }
 
-    // Renderizar toda la interfaz
+    // NUEVA FUNCIÓN: Escanear desde foto o cámara nativa (funciona en cualquier APK)
+    function scanFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const tempScanner = new Html5Qrcode("reader-file-temp");
+      tempScanner.scanFile(file, true)
+        .then(decodedText => {
+          handleQrScan(decodedText);
+          tempScanner.clear();
+        })
+        .catch(() => {
+          const feedback = document.getElementById("scan-feedback");
+          feedback.classList.remove("hidden");
+          feedback.className = "mb-3 p-3 rounded-lg text-sm font-medium bg-amber-100 text-amber-800 border border-amber-300";
+          feedback.innerHTML = `⚠️ No se detectó ningún código QR claro en la foto. Acerca un poco más el carnet e intenta de nuevo.`;
+          tempScanner.clear();
+        });
+      event.target.value = "";
+    }
+
     function renderAll() {
       const dateKey = dateInput.value;
       const dayRecord = attendance[dateKey] || {};
@@ -458,7 +479,6 @@
         return matchSec && matchSearch;
       });
 
-      // Estadísticas
       const total = filtered.length;
       const presentCount = filtered.filter(s => dayRecord[s.id]?.status === "PRESENT").length;
       const absentCount = total - presentCount;
@@ -469,7 +489,6 @@
       document.getElementById("stat-absent").textContent = absentCount;
       document.getElementById("stat-percent").textContent = `${percent}%`;
 
-      // Tabla de asistencia
       const tbody = document.getElementById("attendance-list");
       if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">La matrícula está vacía o no hay coincidencias. Haz clic en <strong>"+ Nuevo Estudiante"</strong> para agregar alumnos.</td></tr>`;
@@ -501,7 +520,6 @@
         }).join("");
       }
 
-      // Simulador en pestaña Escáner
       const simList = document.getElementById("simulator-list");
       if (students.length === 0) {
         simList.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Agrega estudiantes primero para simular el escaneo.</p>`;
@@ -517,14 +535,13 @@
               <button onclick="handleQrScan('${s.id}')" class="text-xs font-semibold px-3 py-1.5 rounded-lg ${
                 isPresent ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }">
-                ${isPresent ? '✔ Escaneado' : '📲 Simular QR'}
+                ${isPresent ? '✔ Presente' : '📲 Marcar'}
               </button>
             </div>
           `;
         }).join("");
       }
 
-      // Galería de Carnets QR
       const cardsContainer = document.getElementById("print-area");
       if (students.length === 0) {
         cardsContainer.innerHTML = `<div class="col-span-full bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-200">No hay carnets para mostrar. Agrega estudiantes con el botón <strong>"+ Nuevo Estudiante"</strong>.</div>`;
@@ -543,7 +560,6 @@
           </div>
         `).join("");
 
-        // Generar cada código QR
         students.forEach(s => {
           const canvas = document.getElementById(`qr-${s.id}`);
           if (canvas && window.QRious) {
@@ -558,7 +574,6 @@
       }
     }
 
-    // Cámara QR
     function startCamera() {
       if (html5QrCode) return;
       html5QrCode = new Html5Qrcode("reader");
@@ -569,8 +584,8 @@
           handleQrScan(decodedText);
         },
         () => {}
-      ).catch(err => {
-        alert("No se pudo acceder a la cámara. Verifica los permisos del navegador o usa el Simulador Rápido.");
+      ).catch(() => {
+        alert("Tu APK actual bloquea el video en vivo. Usa el botón verde '📸 Tomar Foto al QR' que está justo arriba o instala la app desde Chrome.");
         html5QrCode = null;
       });
     }
@@ -584,7 +599,6 @@
       }
     }
 
-    // Exportar asistencia a CSV (Excel)
     function exportCSV() {
       const dateKey = dateInput.value;
       const dayRecord = attendance[dateKey] || {};
@@ -599,13 +613,4 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Asistencia_${dateKey}.csv`;
-      a.click();
-    }
-
-    // Inicializar vista
-    updateSectionFilter();
-    renderAll();
-  </script>
-</body>
-</html>
+      a.download
