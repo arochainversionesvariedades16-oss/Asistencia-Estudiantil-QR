@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AsisQR - Control de Asistencia Estudiantil</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Generador QR (QRious) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <!-- Lector QR (html5-qrcode) -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
+
+  <!-- Barra Superior -->
+  <header class="bg-indigo-700 text-white shadow-md">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">📲</span>
+        <div>
+          <h1 class="text-xl font-bold leading-tight">AsisQR</h1>
+          <p class="text-xs text-indigo-200">Control de Asistencia y Matrícula Estudiantil</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="date" id="current-date" class="bg-indigo-800 text-white text-sm rounded-lg px-3 py-1.5 border border-indigo-500 focus:outline-none" />
+        <button onclick="openModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-3.5 py-2 rounded-lg shadow transition flex items-center gap-1">
+          <span>➕</span> Nuevo Estudiante
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navegación de Pestañas -->
+  <div class="max-w-5xl mx-auto px-4 mt-4">
+    <div class="flex border-b border-slate-300 bg-white rounded-t-xl overflow-hidden shadow-sm">
+      <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-3 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50/50">
+        📋 Asistencia del Día
+      </button>
+      <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+        📷 Escáner QR
+      </button>
+      <button onclick="switchTab('cards')" id="tab-cards" class="flex-1 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+        🪪 Matrícula y Carnets
+      </button>
+    </div>
+  </div>
+
+  <!-- Contenido Principal -->
+  <main class="max-w-5xl mx-auto px-4 py-6">
+
+    <!-- PESTAÑA 1: DASHBOARD DE ASISTENCIA -->
+    <section id="view-dashboard" class="space-y-6">
+      <!-- Tarjetas de Resumen -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+          <p class="text-xs text-slate-500 uppercase font-semibold">Matrícula Total</p>
+          <p id="stat-total" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-emerald-200">
+          <p class="text-xs text-emerald-600 uppercase font-semibold">Presentes Hoy</p>
+          <p id="stat-present" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-rose-200">
+          <p class="text-xs text-rose-600 uppercase font-semibold">Inasistentes</p>
+          <p id="stat-absent" class="text-2xl font-bold text-rose-600 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-indigo-200">
+          <p class="text-xs text-indigo-600 uppercase font-semibold">% Asistencia</p>
+          <p id="stat-percent" class="text-2xl font-bold text-indigo-600 mt-1">0%</p>
+        </div>
+      </div>
+
+      <!-- Filtros y Acciones -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="filter-section" onchange="renderAll()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="ALL">Todas las secciones</option>
+          </select>
+          <input type="text" id="search-input" oninput="renderAll()" placeholder="Buscar por nombre o cédula..." class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-56" />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+            📥 Exportar Excel (CSV)
+          </button>
+          <button onclick="clearAllStudents()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+            🧹 Vaciar Matrícula
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla de Estudiantes -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase">
+                <th class="py-3 px-4">Estudiante</th>
+                <th class="py-3 px-4">Cédula / ID</th>
+                <th class="py-3 px-4">Sección</th>
+                <th class="py-3 px-4">Estado Hoy</th>
+                <th class="py-3 px-4">Hora</th>
+                <th class="py-3 px-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="attendance-list" class="divide-y divide-slate-200 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 2: ESCÁNER QR -->
+    <section id="view-scanner" class="hidden space-y-6">
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Lector de Cámara -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h2 class="font-bold text-base mb-1">Escáner por Cámara</h2>
+          <p class="text-xs text-slate-500 mb-4">Enfoca el código QR del carnet estudiantil para registrar su asistencia.</p>
+          <div id="reader" class="w-full rounded-lg overflow-hidden bg-slate-900 min-h-[240px]"></div>
+          <div class="flex gap-2 mt-4">
+            <button onclick="startCamera()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-lg">
+              ▶️ Iniciar Cámara
+            </button>
+            <button onclick="stopCamera()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-semibold py-2 rounded-lg">
+              ⏹️ Detener
+            </button>
+          </div>
+          <div id="scan-feedback" class="mt-4 hidden p-3 rounded-lg text-sm font-medium"></div>
+        </div>
+
+        <!-- Simulador Rápido -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h2 class="font-bold text-base mb-1">Simulador de Escaneo Rápido</h2>
+          <p class="text-xs text-slate-500 mb-4">Haz clic en cualquier estudiante para simular la lectura de su código QR.</p>
+          <div id="simulator-list" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 3: MATRÍCULA Y CARNETS -->
+    <section id="view-cards" class="hidden space-y-6">
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h2 class="font-bold text-base">Gestión de Matrícula y Carnets QR</h2>
+          <p class="text-xs text-slate-500">Agrega, elimina, respalda o imprime los carnets estudiantiles con código QR.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="openModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
+            ➕ Insertar Estudiante
+          </button>
+          <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
+            🖨️ Imprimir Carnets
+          </button>
+          <button onclick="exportBackup()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-lg" title="Guardar copia para pasar al teléfono o PC">
+            💾 Respaldar Datos
+          </button>
+          <label class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer">
+            📂 Cargar Respaldo
+            <input type="file" accept=".json" onchange="importBackup(event)" class="hidden" />
+          </label>
+          <button onclick="clearAllStudents()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">
+            🧹 Vaciar Matrícula
+          </button>
+          <button onclick="resetDemoData()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg">
+            🔄 Restaurar Ejemplo
+          </button>
+        </div>
+      </div>
+
+      <!-- Cuadrícula de Carnets -->
+      <div id="print-area" class="grid sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+    </section>
+
+  </main>
+
+  <!-- MODAL PARA INSERTAR / EDITAR ESTUDIANTE -->
+  <div id="student-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-slate-800">Nuevo Estudiante</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+      </div>
+      <form id="student-form" onsubmit="saveStudent(event)" class="space-y-4">
+        <input type="hidden" id="student-id" />
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre y Apellido *</label>
+          <input type="text" id="student-name" required placeholder="Ej. María Fernanda Pérez" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Cédula o Código Estudiantil *</label>
+          <input type="text" id="student-cedula" required placeholder="Ej. V-31.456.789" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Año / Sección *</label>
+          <input type="text" id="student-section" required placeholder="Ej. 3er Año B" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">
+            Cancelar
+          </button>
+          <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+            Guardar Estudiante
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Datos iniciales de ejemplo
+    const DEFAULT_STUDENTS = [
+      { id: "EST-101", name: "Carlos Eduardo Gómez", cedula: "V-31.204.110", section: "3er Año B" },
+      { id: "EST-102", name: "Mariana Valentina Rivas", cedula: "V-31.550.890", section: "3er Año B" },
+      { id: "EST-103", name: "Luis Alejandro Torres", cedula: "V-32.100.432", section: "1er Año A" },
+      { id: "EST-104", name: "Sofía Gabriela Méndez", cedula: "V-30.988.120", section: "5to Año U" }
+    ];
+
+    const storedStudents = localStorage.getItem("asisqr_students");
+    let students = storedStudents !== null ? JSON.parse(storedStudents) : DEFAULT_STUDENTS;
+    let attendance = JSON.parse(localStorage.getItem("asisqr_attendance")) || {};
+    let html5QrCode = null;
+
+    // Inicializar fecha de hoy
+    const dateInput = document.getElementById("current-date");
+    const todayStr = new Date().toISOString().split("T")[0];
+    dateInput.value = todayStr;
+    dateInput.addEventListener("change", renderAll);
+
+    function saveToStorage() {
+      localStorage.setItem("asisqr_students", JSON.stringify(students));
+      localStorage.setItem("asisqr_attendance", JSON.stringify(attendance));
+    }
+
+    // Sonido Beep al escanear
+    function playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      } catch (e) {}
+    }
+
+    // Cambiar de pestaña
+    function switchTab(tab) {
+      ["dashboard", "scanner", "cards"].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle("hidden", t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tab) {
+          btn.className = "flex-1 py-3 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50/50";
+        } else {
+          btn.className = "flex-1 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50";
+        }
+      });
+      if (tab !== "scanner") stopCamera();
+      renderAll();
+    }
+
+    // Actualizar opciones del filtro de secciones
+    function updateSectionFilter() {
+      const select = document.getElementById("filter-section");
+      const currentVal = select.value;
+      const sections = [...new Set(students.map(s => s.section))].sort();
+      select.innerHTML = `<option value="ALL">Todas las secciones</option>` +
+        sections.map(sec => `<option value="${sec}">${sec}</option>`).join("");
+      if (sections.includes(currentVal)) select.value = currentVal;
+    }
+
+    // Abrir y cerrar modal para Agregar o Editar Estudiante
+    function openModal(studentId = null) {
+      const modal = document.getElementById("student-modal");
+      const title = document.getElementById("modal-title");
+      const idInput = document.getElementById("student-id");
+      const nameInput = document.getElementById("student-name");
+      const cedulaInput = document.getElementById("student-cedula");
+      const sectionInput = document.getElementById("student-section");
+
+      if (studentId) {
+        const st = students.find(s => s.id === studentId);
+        if (!st) return;
+        title.textContent = "Editar Estudiante";
+        idInput.value = st.id;
+        nameInput.value = st.name;
+        cedulaInput.value = st.cedula;
+        sectionInput.value = st.section;
+      } else {
+        title.textContent = "Nuevo Estudiante";
+        idInput.value = "";
+        nameInput.value = "";
+        cedulaInput.value = "";
+        sectionInput.value = "3er Año B";
+      }
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      nameInput.focus();
+    }
+
+    function closeModal() {
+      const modal = document.getElementById("student-modal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    // Guardar Estudiante (Nuevo o Editado)
+    function saveStudent(e) {
+      e.preventDefault();
+      const idVal = document.getElementById("student-id").value;
+      const name = document.getElementById("student-name").value.trim();
+      const cedula = document.getElementById("student-cedula").value.trim();
+      const section = document.getElementById("student-section").value.trim();
+
+      if (!name || !cedula || !section) return;
+
+      if (idVal) {
+        const idx = students.findIndex(s => s.id === idVal);
+        if (idx > -1) {
+          students[idx] = { ...students[idx], name, cedula, section };
+        }
+      } else {
+        const newId = "EST-" + Date.now().toString().slice(-5);
+        students.push({ id: newId, name, cedula, section });
+      }
+
+      saveToStorage();
+      updateSectionFilter();
+      closeModal();
+      renderAll();
+    }
+
+    // Eliminar Estudiante Individual
+    function deleteStudent(studentId) {
+      const st = students.find(s => s.id === studentId);
+      if (!st) return;
+      if (!confirm(`¿Seguro que deseas eliminar a "${st.name}" de la matrícula?`)) return;
+
+      students = students.filter(s => s.id !== studentId);
+      saveToStorage();
+      updateSectionFilter();
+      renderAll();
+    }
+
+    // Vaciar Toda la Matrícula de un solo golpe
+    function clearAllStudents() {
+      if (students.length === 0) {
+        alert("La matrícula ya está vacía.");
+        return;
+      }
+      if (!confirm("⚠️ ¿Seguro que deseas BORRAR TODOS los estudiantes de la matrícula para empezar desde cero?")) return;
+      students = [];
+      saveToStorage();
+      updateSectionFilter();
+      renderAll();
+    }
+
+    // Restaurar datos de demostración
+    function resetDemoData() {
+      if (!confirm("¿Restaurar los 4 estudiantes de ejemplo? Esto reemplazará la lista actual.")) return;
+      students = [...DEFAULT_STUDENTS];
+      saveToStorage();
+      updateSectionFilter();
+      renderAll();
+    }
+
+    // Exportar e Importar Respaldo (Para pasar datos entre PC y Teléfono)
+    function exportBackup() {
+      const data = { students, attendance };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Respaldo_AsisQR_${dateInput.value}.json`;
+      a.click();
+    }
+
+    function importBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (Array.isArray(data.students)) {
+            students = data.students;
+            attendance = data.attendance || {};
+            saveToStorage();
+            updateSectionFilter();
+            renderAll();
+            alert("✅ Matrícula y asistencias cargadas correctamente.");
+          } else {
+            alert("⚠️ El archivo no tiene un formato válido.");
+          }
+        } catch (err) {
+          alert("⚠️ Error al leer el archivo de respaldo.");
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+
+    // Alternar o Registrar Asistencia
+    function toggleAttendance(studentId, forcePresent = false) {
+      const dateKey = dateInput.value;
+      if (!attendance[dateKey]) attendance[dateKey] = {};
+
+      if (forcePresent || !attendance[dateKey][studentId]) {
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        attendance[dateKey][studentId] = { status: "PRESENT", time: now };
+      } else {
+        delete attendance[dateKey][studentId];
+      }
+      saveToStorage();
+      renderAll();
+    }
+
+    // Procesar código QR leído
+    function handleQrScan(decodedText) {
+      const st = students.find(s => s.id === decodedText.trim() || s.cedula === decodedText.trim());
+      const feedback = document.getElementById("scan-feedback");
+      feedback.classList.remove("hidden");
+
+      if (st) {
+        playBeep();
+        toggleAttendance(st.id, true);
+        feedback.className = "mt-4 p-3 rounded-lg text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-300";
+        feedback.innerHTML = `✅ <strong>Asistencia registrada:</strong> ${st.name} (${st.section})`;
+      } else {
+        feedback.className = "mt-4 p-3 rounded-lg text-sm font-medium bg-rose-100 text-rose-800 border border-rose-300";
+        feedback.innerHTML = `⚠️ Código QR no reconocido en la matrícula (${decodedText}).`;
+      }
+    }
+
+    // Renderizar toda la interfaz
+    function renderAll() {
+      const dateKey = dateInput.value;
+      const dayRecord = attendance[dateKey] || {};
+      const sectionFilter = document.getElementById("filter-section").value;
+      const searchQuery = document.getElementById("search-input").value.toLowerCase();
+
+      const filtered = students.filter(s => {
+        const matchSec = sectionFilter === "ALL" || s.section === sectionFilter;
+        const matchSearch = s.name.toLowerCase().includes(searchQuery) || s.cedula.toLowerCase().includes(searchQuery);
+        return matchSec && matchSearch;
+      });
+
+      // Estadísticas
+      const total = filtered.length;
+      const presentCount = filtered.filter(s => dayRecord[s.id]?.status === "PRESENT").length;
+      const absentCount = total - presentCount;
+      const percent = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+
+      document.getElementById("stat-total").textContent = total;
+      document.getElementById("stat-present").textContent = presentCount;
+      document.getElementById("stat-absent").textContent = absentCount;
+      document.getElementById("stat-percent").textContent = `${percent}%`;
+
+      // Tabla de asistencia
+      const tbody = document.getElementById("attendance-list");
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">La matrícula está vacía o no hay coincidencias. Haz clic en <strong>"+ Nuevo Estudiante"</strong> para agregar alumnos.</td></tr>`;
+      } else {
+        tbody.innerHTML = filtered.map(s => {
+          const rec = dayRecord[s.id];
+          const isPresent = rec?.status === "PRESENT";
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-3 px-4 font-medium text-slate-800">${s.name}</td>
+              <td class="py-3 px-4 text-slate-500">${s.cedula}</td>
+              <td class="py-3 px-4"><span class="bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-full">${s.section}</span></td>
+              <td class="py-3 px-4">
+                <button onclick="toggleAttendance('${s.id}')" class="px-3 py-1 rounded-full text-xs font-bold transition ${
+                  isPresent
+                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    : 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                }">
+                  ${isPresent ? '✔ PRESENTE' : '✖ INASISTENTE'}
+                </button>
+              </td>
+              <td class="py-3 px-4 text-slate-500 text-xs">${rec?.time || '—'}</td>
+              <td class="py-3 px-4 text-right space-x-1">
+                <button onclick="openModal('${s.id}')" title="Editar estudiante" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded hover:bg-slate-100">✏️</button>
+                <button onclick="deleteStudent('${s.id}')" title="Eliminar estudiante" class="p-1.5 text-slate-500 hover:text-rose-600 rounded hover:bg-rose-50">🗑️</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      // Simulador en pestaña Escáner
+      const simList = document.getElementById("simulator-list");
+      if (students.length === 0) {
+        simList.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Agrega estudiantes primero para simular el escaneo.</p>`;
+      } else {
+        simList.innerHTML = students.map(s => {
+          const isPresent = dayRecord[s.id]?.status === "PRESENT";
+          return `
+            <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50">
+              <div>
+                <p class="text-sm font-semibold">${s.name}</p>
+                <p class="text-xs text-slate-500">${s.section} • ${s.cedula}</p>
+              </div>
+              <button onclick="handleQrScan('${s.id}')" class="text-xs font-semibold px-3 py-1.5 rounded-lg ${
+                isPresent ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }">
+                ${isPresent ? '✔ Escaneado' : '📲 Simular QR'}
+              </button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Galería de Carnets QR
+      const cardsContainer = document.getElementById("print-area");
+      if (students.length === 0) {
+        cardsContainer.innerHTML = `<div class="col-span-full bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-200">No hay carnets para mostrar. Agrega estudiantes con el botón <strong>"+ Nuevo Estudiante"</strong>.</div>`;
+      } else {
+        cardsContainer.innerHTML = students.map(s => `
+          <div class="bg-white rounded-xl border border-slate-300 shadow-sm p-4 flex flex-col items-center text-center relative">
+            <div class="absolute top-2 right-2 flex gap-1 no-print">
+              <button onclick="openModal('${s.id}')" title="Editar" class="text-xs p-1 bg-slate-100 hover:bg-slate-200 rounded">✏️</button>
+              <button onclick="deleteStudent('${s.id}')" title="Eliminar" class="text-xs p-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded">🗑️</button>
+            </div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full mb-2">${s.section}</span>
+            <canvas id="qr-${s.id}" class="my-2 border p-1 rounded-lg"></canvas>
+            <h3 class="font-bold text-slate-800 text-sm mt-1">${s.name}</h3>
+            <p class="text-xs text-slate-500">${s.cedula}</p>
+            <p class="text-[10px] text-slate-400 font-mono mt-1">ID: ${s.id}</p>
+          </div>
+        `).join("");
+
+        // Generar cada código QR
+        students.forEach(s => {
+          const canvas = document.getElementById(`qr-${s.id}`);
+          if (canvas && window.QRious) {
+            new QRious({
+              element: canvas,
+              value: s.id,
+              size: 130,
+              level: "H"
+            });
+          }
+        });
+      }
+    }
+
+    // Cámara QR
+    function startCamera() {
+      if (html5QrCode) return;
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 200, height: 200 } },
+        (decodedText) => {
+          handleQrScan(decodedText);
+        },
+        () => {}
+      ).catch(err => {
+        alert("No se pudo acceder a la cámara. Verifica los permisos del navegador o usa el Simulador Rápido.");
+        html5QrCode = null;
+      });
+    }
+
+    function stopCamera() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+          html5QrCode = null;
+        }).catch(() => {});
+      }
+    }
+
+    // Exportar asistencia a CSV (Excel)
+    function exportCSV() {
+      const dateKey = dateInput.value;
+      const dayRecord = attendance[dateKey] || {};
+      let csv = "Nombre,Cedula,Seccion,Fecha,Estado,Hora\n";
+      students.forEach(s => {
+        const rec = dayRecord[s.id];
+        const status = rec?.status === "PRESENT" ? "Presente" : "Inasistente";
+        const time = rec?.time || "-";
+        csv += `"${s.name}","${s.cedula}","${s.section}","${dateKey}","${status}","${time}"\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Asistencia_${dateKey}.csv`;
+      a.click();
+    }
+
+    // Inicializar vista
+    updateSectionFilter();
+    renderAll();
+  </script>
+</body>
+</html>
