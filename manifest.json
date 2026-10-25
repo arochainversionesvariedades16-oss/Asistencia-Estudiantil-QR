@@ -1,15 +1,13 @@
 {
-  "name": "AsisQR Control de Asistencia",
-  "short_name": "AsisQR",
-  "start_url": "./index.html",
+  "background_color": "#3abfe8",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#4338ca",
-  "icons": [
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135755.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "name": "Asistencia Estudiantil QR",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "arochainversionesvariedades16-oss.github",
+  "start_url": "/",
+  "theme_color": "#0d22db",
+  "id": "Asistencia Estudiantil QR",
+  "description": "Aplicación para registro de asistencias e inasistencia estudiantes"
 }
